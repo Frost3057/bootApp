@@ -46,19 +46,19 @@ class jwtService (
         return tokenType == "refreshToken"
     }
 
-    fun getObjectId(token:String):String{
+    fun getOwnerId(token:String):String{
+        val claim = parseAllclaims(token) ?: throw IllegalArgumentException("Invalid Token")
+        return claim.subject
+    }
+
+    private fun parseAllclaims(token:String): Claims?{
         val raw = if(token.startsWith("Bearer ")){
             token.removePrefix("Bearer ")
         }else{
             token
         }
-        val claim = parseAllclaims(raw) ?: throw IllegalArgumentException("Invalid Token")
-        return claim.subject
-    }
-
-    private fun parseAllclaims(token:String): Claims?{
         return try{
-             Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).payload
+             Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(raw).payload
         }catch (e:Exception){
              null
         }
