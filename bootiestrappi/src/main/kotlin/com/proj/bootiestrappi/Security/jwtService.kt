@@ -10,10 +10,11 @@ import java.util.*
 
 @Service
 class jwtService (
+    @Value("\${jwt.secret}") private val secret : String
 ){
-    private val secretKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode("YWRtaW5pc3RyYXRvcg"))
+    private val secretKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret))
     private val accessTokenDuration = 15L*60*1000L
-    private val refreshTokenDuration = 30L*24*60*60*1000L
+    val refreshTokenDuration = 30L*24*60*60*1000L
     private fun generateToken(
          userId:String,
          type:String,
