@@ -1,67 +1,81 @@
 package com.proj.bootiestrappi.Security
-
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
-import org.bson.types.ObjectId
+import org.slf4j.helpers.Reporter.info
+
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatusCode
 import org.springframework.stereotype.Service
-import java.util.*
+import org.springframework.web.server.ResponseStatusException
+import java.util.Base64
+import java.util.Date
 
 @Service
-class jwtService (
-    @Value("\${jwt.secret}") private val secret : String
-){
-    private val secretKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret))
-    private val accessTokenDuration = 15L*60*1000L
-    val refreshTokenDuration = 30L*24*60*60*1000L
+class JwtService(
+    @Value("\${jwt.secret}") private val jwtSecret: String
+) {
+
+    private val secretKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret))
+    private val accessTokenValidityMs = 15L * 60L * 1000L
+    val refreshTokenValidityMs = 30L * 24 * 60 * 60 * 1000L
+
     private fun generateToken(
-         userId:String,
-         type:String,
-         liveTime:Long
-    ):String{
+        userId: String,
+        type: String,
+        expiry: Long
+    ): String {
         val now = Date()
-        val expiryDate = Date(now.time+liveTime)
+        val expiryDate = Date(now.time + expiry)
         return Jwts.builder()
             .subject(userId)
-            .claim("type",type)
+            .claim("type", type)
             .issuedAt(now)
-            .expiration(expiryDate).signWith(secretKey,Jwts.SIG.HS256).compact()
+            .expiration(expiryDate)
+            .signWith(secretKey, Jwts.SIG.HS256)
+            .compact()
     }
 
-    fun generateAccessToken(userId: String):String{
-        return generateToken(userId,"accessToken",accessTokenDuration)
-    }
-    fun generateRefreshToken(userId: String):String{
-        return generateToken(userId,"refreshToken",refreshTokenDuration)
-    }
-    fun validateAccessToken(token:String):Boolean{
-        val claim = parseAllclaims(token)?: return false
-        val tokenType = claim.subject as? String ?: return false
-        return tokenType == "accessToken"
+    fun generateAccessToken(userId: String): String {
+        return generateToken(userId, "access", accessTokenValidityMs)
     }
 
-    fun validateRefreshToken(token:String):Boolean{
-        val claim = parseAllclaims(token)?: return false
-        val tokenType = claim.subject as? String ?: return false
-        return tokenType == "refreshToken"
+    fun generateRefreshToken(userId: String): String {
+        return generateToken(userId, "refresh", refreshTokenValidityMs)
     }
 
-    fun getOwnerId(token:String):String{
-        val claim = parseAllclaims(token) ?: throw IllegalArgumentException("Invalid Token")
-        return claim.subject
+    fun validateAccessToken(token: String): Boolean {
+        val claims = parseAllClaims(token) ?: return false
+        val tokenType = claims["type"] as? String ?: return false
+        return tokenType == "access"
     }
 
-    private fun parseAllclaims(token:String): Claims?{
-        val raw = if(token.startsWith("Bearer ")){
+    fun validateRefreshToken(token: String): Boolean {
+        val claims = parseAllClaims(token) ?: return false
+        val tokenType = claims["type"] as? String ?: return false
+        return tokenType == "refresh"
+    }
+
+    fun getUserIdFromToken(token: String): String {
+        val claims = parseAllClaims(token) ?: throw ResponseStatusException(
+            HttpStatusCode.valueOf(401),
+            "Invalid token."
+        )
+        return claims.subject
+    }
+
+    private fun parseAllClaims(token: String): Claims? {
+        val rawToken = if(token.startsWith("Bearer ")) {
             token.removePrefix("Bearer ")
-        }else{
-            token
-        }
-        return try{
-             Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(raw).payload
-        }catch (e:Exception){
-             null
+        } else token
+        return try {
+            Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(rawToken)
+                .payload
+        } catch(e: Exception) {
+            null
         }
     }
 }
